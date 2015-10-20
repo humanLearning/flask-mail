@@ -348,7 +348,7 @@ class Message(object):
             related = MIMEMultipart('related')
             for mimetype, content in self.rels.items():
                 related.attach(self._mimetext(content, mimetype))
-            msg.attach(related)
+            alternative.attach(related)
 
         if self.subject:
             msg['Subject'] = sanitize_subject(force_text(self.subject), encoding)
