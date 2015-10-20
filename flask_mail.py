@@ -228,12 +228,13 @@ class Attachment(object):
     """
 
     def __init__(self, filename=None, content_type=None, data=None,
-                 disposition=None, headers=None):
+                 disposition=None, headers=None, attach_to_alternative=False):
         self.filename = filename
         self.content_type = content_type
         self.data = data
         self.disposition = disposition or 'attachment'
         self.headers = headers or {}
+        self.attach_to_alternative = attach_to_alternative
 
 
 class Message(object):
@@ -323,6 +324,7 @@ class Message(object):
 
         attachments = self.attachments or []
 
+        alternative = None
         if len(attachments) == 0 and not self.alts:
             # No html content and zero attachments means plain text
             msg = self._mimetext(self.body)
@@ -385,8 +387,11 @@ class Message(object):
 
             for key, value in attachment.headers.items():
                 f.add_header(key, value)
+            if alternative and attachment.attach_to_alternative:
+                alternative.attach(f)
+            else:
+                msg.attach(f)
 
-            msg.attach(f)
         if message_policy:
             msg.policy = message_policy
 
@@ -454,7 +459,8 @@ class Message(object):
                content_type=None,
                data=None,
                disposition=None,
-               headers=None):
+               headers=None,
+               attach_to_alternative=False):
         """Adds an attachment to the message.
 
         :param filename: filename of attachment
@@ -463,7 +469,7 @@ class Message(object):
         :param disposition: content-disposition (if any)
         """
         self.attachments.append(
-            Attachment(filename, content_type, data, disposition, headers))
+            Attachment(filename, content_type, data, disposition, headers, attach_to_alternative))
 
 
 class _MailMixin(object):
