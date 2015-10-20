@@ -228,13 +228,15 @@ class Attachment(object):
     """
 
     def __init__(self, filename=None, content_type=None, data=None,
-                 disposition=None, headers=None, attach_to_alternative=False):
+                 disposition=None, headers=None, attach_to_alternative=False,
+                 attach_to_related=False):
         self.filename = filename
         self.content_type = content_type
         self.data = data
         self.disposition = disposition or 'attachment'
         self.headers = headers or {}
         self.attach_to_alternative = attach_to_alternative
+        self.attach_to_related = attach_to_related
 
 
 class Message(object):
@@ -262,6 +264,7 @@ class Message(object):
                  body=None,
                  html=None,
                  alts=None,
+                 rels=None,
                  sender=None,
                  cc=None,
                  bcc=None,
@@ -286,6 +289,7 @@ class Message(object):
         self.bcc = bcc or []
         self.body = body
         self.alts = dict(alts or {})
+        self.rels = dict(rels or {})
         self.html = html
         self.date = date
         self.msgId = make_msgid()
@@ -301,14 +305,14 @@ class Message(object):
 
     @property
     def html(self):
-        return self.alts.get('html')
+        return self.rels.get('html')
 
     @html.setter
     def html(self, value):
         if value is None:
-            self.alts.pop('html', None)
+            self.rels.pop('html', None)
         else:
-            self.alts['html'] = value
+            self.rels['html'] = value
 
     def _mimetext(self, text, subtype='plain'):
         """Creates a MIMEText object with the given subtype (default: 'plain')
@@ -325,10 +329,11 @@ class Message(object):
         attachments = self.attachments or []
 
         alternative = None
-        if len(attachments) == 0 and not self.alts:
+        related = None
+        if len(attachments) == 0 and not (self.alts or self.rels):
             # No html content and zero attachments means plain text
             msg = self._mimetext(self.body)
-        elif len(attachments) > 0 and not self.alts:
+        elif len(attachments) > 0 and not (self.alts or self.rels):
             # No html and at least one attachment means multipart
             msg = MIMEMultipart()
             msg.attach(self._mimetext(self.body))
@@ -340,6 +345,10 @@ class Message(object):
             for mimetype, content in self.alts.items():
                 alternative.attach(self._mimetext(content, mimetype))
             msg.attach(alternative)
+            related = MIMEMultipart('related')
+            for mimetype, content in self.rels.items():
+                related.attach(self._mimetext(content, mimetype))
+            msg.attach(related)
 
         if self.subject:
             msg['Subject'] = sanitize_subject(force_text(self.subject), encoding)
@@ -389,6 +398,8 @@ class Message(object):
                 f.add_header(key, value)
             if alternative and attachment.attach_to_alternative:
                 alternative.attach(f)
+            elif related and attachment.attach_to_related:
+                related.attach(f)
             else:
                 msg.attach(f)
 
@@ -460,7 +471,8 @@ class Message(object):
                data=None,
                disposition=None,
                headers=None,
-               attach_to_alternative=False):
+               attach_to_alternative=False,
+               attach_to_related=False):
         """Adds an attachment to the message.
 
         :param filename: filename of attachment
@@ -469,7 +481,16 @@ class Message(object):
         :param disposition: content-disposition (if any)
         """
         self.attachments.append(
-            Attachment(filename, content_type, data, disposition, headers, attach_to_alternative))
+            Attachment(
+                filename,
+                content_type,
+                data,
+                disposition,
+                headers,
+                attach_to_alternative,
+                attach_to_related
+            )
+        )
 
 
 class _MailMixin(object):
